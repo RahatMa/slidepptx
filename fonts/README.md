@@ -1,0 +1,1 @@
+Optional: put `Kalpurush.ttf` here (exact file name) to make the browser preview and line fitting exact on computers that don't have Kalpurush installed. The generated PowerPoint never embeds fonts; the presenting computer needs Kalpurush and Hind Siliguri installed.

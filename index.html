@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QBank Slides — Excel to editable PowerPoint</title>
+<meta name="description" content="Turn an Excel sheet of MCQs and problems into an editable PowerPoint deck, in the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Kalpurush: uses the copy installed on this computer, or fonts/Kalpurush.ttf if you add it to the repo */
+  @font-face { font-family: 'Kalpurush'; src: local('Kalpurush'), url('fonts/Kalpurush.ttf') format('truetype'); font-display: swap; }
+
+  :root {
+    color-scheme: light;
+    --paper: #FFFFFF;
+    --ink: #17141F;
+    --muted: #625D6E;
+    --line: #E3E0EA;
+    --field: #FAF9FC;
+    --violet: #5B3FD9;
+    --violet-ink: #FFFFFF;
+    --violet-soft: #F1EEFF;
+    --stage: #1C1A22;
+    --stage-ink: #C9C5D3;
+    --ok: #15803D;
+    --warn: #8A5300;
+    --warn-soft: #FFF6E5;
+    --err: #B42318;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper: #121117; --ink: #ECEAF2; --muted: #A29DAE; --line: #2D2A36; --field: #1A1820;
+      --violet: #8F78FF; --violet-ink: #120D2B; --violet-soft: #221C3D; --stage: #08070B; --stage-ink: #A29DAE;
+      --ok: #4ADE80; --warn: #F5B544; --warn-soft: #2A2112; --err: #FF8A80;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #121117; --ink: #ECEAF2; --muted: #A29DAE; --line: #2D2A36; --field: #1A1820;
+    --violet: #8F78FF; --violet-ink: #120D2B; --violet-soft: #221C3D; --stage: #08070B; --stage-ink: #A29DAE;
+    --ok: #4ADE80; --warn: #F5B544; --warn-soft: #2A2112; --err: #FF8A80;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: 'Hind Siliguri', 'Kalpurush', system-ui, sans-serif;
+    font-size: 16px; line-height: 1.55; color: var(--ink); background: var(--paper);
+  }
+  a { color: var(--violet); }
+  :focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; border-radius: 4px; }
+
+  .app { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; min-height: 100vh; }
+  .controls { padding: 28px 28px 40px; border-right: 1px solid var(--line); }
+  .stage { background: var(--stage); color: var(--stage-ink); padding: 24px; position: sticky; top: 0; height: 100vh; overflow: auto; }
+
+  h1 { font-size: 28px; line-height: 1.15; margin: 0 0 6px; font-weight: 700; letter-spacing: -0.01em; }
+  .lede { margin: 0 0 28px; color: var(--muted); max-width: 38ch; }
+
+  .step { display: grid; grid-template-columns: 34px 1fr; gap: 0 12px; margin-bottom: 28px; }
+  .step-n {
+    width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    font-weight: 700; background: var(--violet-soft); color: var(--violet); font-size: 17px;
+  }
+  .step h2 { font-size: 20px; margin: 3px 0 10px; font-weight: 600; }
+  .step-body { min-width: 0; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; text-decoration: none;
+  }
+  .btn:hover { border-color: var(--violet); }
+  .btn-primary { background: var(--violet); color: var(--violet-ink); border-color: var(--violet); }
+  .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-big { width: 100%; padding: 14px 18px; font-size: 18px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .small { font-size: 14px; color: var(--muted); }
+
+  details.card { border: 1px solid var(--line); border-radius: var(--radius); margin-top: 14px; background: var(--field); }
+  details.card > summary { cursor: pointer; padding: 12px 14px; font-weight: 600; list-style: none; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::after { content: '+'; float: right; color: var(--muted); font-weight: 400; }
+  details.card[open] > summary::after { content: '−'; }
+  .card-body { padding: 0 14px 14px; }
+  .card-body ol { padding-left: 20px; margin: 6px 0 12px; }
+  textarea#claudePrompt {
+    width: 100%; height: 150px; resize: vertical; font: 13px/1.45 ui-monospace, Consolas, monospace;
+    padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+  }
+
+  .drop {
+    display: block; border: 2px dashed var(--line); border-radius: var(--radius); padding: 22px 18px; text-align: center;
+    background: var(--field); cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop.over, .drop:hover { border-color: var(--violet); background: var(--violet-soft); }
+  .drop strong { display: block; font-size: 17px; }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .file-info { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+  .file-info:empty { display: none; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 14px; cursor: pointer; background: var(--paper); }
+  .chip-n { color: var(--muted); }
+
+  fieldset { border: 0; padding: 0; margin: 0 0 16px; min-width: 0; }
+  legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  label.field { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+  label.field input, label.field select {
+    font: inherit; font-size: 15px; color: var(--ink); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); width: 100%;
+  }
+  label.check { display: flex; gap: 8px; align-items: flex-start; font-size: 15px; margin: 4px 0; cursor: pointer; }
+  label.check input { margin-top: 5px; accent-color: var(--violet); }
+  .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
+  .generate-box { position: sticky; bottom: 0; background: var(--paper); padding: 14px 0 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+  #status { min-height: 1.4em; margin: 8px 0 0; font-size: 14px; }
+  #status[data-kind="ok"] { color: var(--ok); }
+  #status[data-kind="warn"] { color: var(--warn); }
+  #status[data-kind="error"] { color: var(--err); }
+
+  .stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .stage-head h2 { color: #fff; font-size: 18px; margin: 0; font-weight: 600; }
+  .note { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 0 0 12px; }
+  #warnings { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
+  #warnings ul { margin: 6px 0 0; padding-left: 18px; max-height: 160px; overflow: auto; }
+  .warn-title { margin: 0; font-weight: 600; }
+
+  .empty { border: 1px dashed #3a3644; border-radius: var(--radius); padding: 40px 24px; text-align: center; max-width: 520px; margin: 10vh auto 0; }
+  .empty p { margin: 0 0 12px; }
+  .empty .btn { background: transparent; color: #fff; border-color: #4a4555; }
+
+  .preview { display: grid; gap: 16px; }
+  .thumb { margin: 0; cursor: zoom-in; }
+  .thumb .slide { border-radius: 4px; box-shadow: 0 0 0 1px #2e2b36; }
+  .thumb figcaption { font-size: 13px; padding-top: 6px; color: var(--stage-ink); }
+  .thumb:focus-visible { outline-offset: 4px; }
+
+  dialog#large { border: 0; padding: 16px; background: #0d0c11; color: #ddd; border-radius: 12px; max-width: calc(100vw - 24px); }
+  dialog#large::backdrop { background: rgba(0,0,0,.7); }
+  .large-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+  .large-bar .btn { background: #1d1b24; color: #fff; border-color: #34303e; padding: 6px 12px; }
+
+  @media (max-width: 960px) {
+    .app { grid-template-columns: 1fr; }
+    .controls { border-right: 0; padding: 22px 18px 24px; }
+    .stage { position: static; height: auto; min-height: 60vh; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="controls">
+    <h1>QBank Slides</h1>
+    <p class="lede">Turn an Excel sheet of MCQs and problems into an editable PowerPoint deck. Everything runs in your browser — files never leave your computer.</p>
+
+    <section class="step" aria-labelledby="s1">
+      <div class="step-n" aria-hidden="true">1</div>
+      <div class="step-body">
+        <h2 id="s1">Fill in the template</h2>
+        <div class="row">
+          <a class="btn" href="template/question_template.xlsx" download>Download Excel template</a>
+          <a class="small" href="#" id="loadExample">or try the example</a>
+        </div>
+        <details class="card" id="claudeCard">
+          <summary>Have photos or PDFs instead?</summary>
+          <div class="card-body">
+            <p class="small" style="margin-top:0">Claude can read them and fill the template for you, including the math and cropped figures.</p>
+            <ol class="small">
+              <li>Copy the prompt and fill in the two lines at the top.</li>
+              <li>Open Claude, paste the prompt and attach your photos or PDF.</li>
+              <li>Bring the .xlsx (and the .zip of figures) back here in step 2.</li>
+            </ol>
+            <textarea id="claudePrompt" readonly aria-label="Prompt for Claude"></textarea>
+            <div class="row" style="margin-top:8px">
+              <button class="btn" id="copyPrompt" type="button">Copy prompt</button>
+              <a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude</a>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s2">
+      <div class="step-n" aria-hidden="true">2</div>
+      <div class="step-body">
+        <h2 id="s2">Add your files</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.xlsm,.csv,.ods,.zip,image/*,.pdf">
+          <strong>Drop the Excel file here</strong>
+          <span class="small">Add the question images too (or one .zip) — or click to choose</span>
+        </label>
+        <p class="file-info" id="workbookInfo"></p>
+        <p class="file-info" id="imageInfo"></p>
+        <div id="examFilterWrap" hidden>
+          <p class="small" style="margin:12px 0 0">Include these exams:</p>
+          <div class="chips" id="examFilter"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s3">
+      <div class="step-n" aria-hidden="true">3</div>
+      <div class="step-body">
+        <h2 id="s3">Check the settings</h2>
+
+        <fieldset>
+          <legend>Slides for each question</legend>
+          <label class="check"><input type="checkbox" id="slQuestion" data-setting checked> Question slide</label>
+          <label class="check"><input type="checkbox" id="slAnswer" data-setting checked> Answer slide — the correct option turns green</label>
+          <label class="check"><input type="checkbox" id="slSolution" data-setting checked> Solution slide, when the row has a solution</label>
+          <label class="check"><input type="checkbox" id="slNotes" data-setting checked> Answer and solution in the speaker notes</label>
+          <label class="check" id="splitWrap" hidden><input type="checkbox" id="splitByExam" data-setting> One PowerPoint file per ExamID</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Text</legend>
+          <div class="grid2">
+            <label class="field">Bengali font
+              <input id="fontBn" list="fontList" value="Kalpurush" data-setting></label>
+            <label class="field">English &amp; numbers font
+              <input id="fontLat" list="fontList" value="Hind Siliguri" data-setting></label>
+            <label class="field">Math font
+              <input id="fontMath" list="fontList" value="Hind Siliguri" data-setting></label>
+            <label class="field">Line spacing
+              <input id="lineSpacing" type="number" step="0.1" min="0.8" max="3" value="1.5" data-setting></label>
+            <label class="field">Font size (pt)
+              <input id="fontSize" type="number" min="12" max="200" value="72" data-setting></label>
+            <label class="field">Shrink no smaller than (pt)
+              <input id="minFontSize" type="number" min="10" max="200" value="44" data-setting></label>
+          </div>
+          <datalist id="fontList">
+            <option value="Kalpurush"><option value="Hind Siliguri"><option value="SolaimanLipi"><option value="Nikosh">
+            <option value="Noto Sans Bengali"><option value="Noto Serif Bengali"><option value="Siyam Rupali"><option value="Cambria Math"><option value="Nirmala UI">
+          </datalist>
+          <label class="check" style="margin-top:8px"><input type="checkbox" id="nativeEq" data-setting checked> Formulas as PowerPoint equations (editable with Insert ▸ Equation; uses Cambria Math)</label>
+          <p class="hint">Text starts at the font size and shrinks in 4 pt steps only when a slide would overflow.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Look</legend>
+          <div class="grid2">
+            <label class="field">Background
+              <select id="theme" data-setting><option value="dark">Black (like the class slides)</option><option value="light">White</option></select></label>
+            <label class="field">Option letters
+              <select id="optionLetters" data-setting><option value="en">A B C D</option><option value="bn">ক খ গ ঘ</option></select></label>
+            <label class="field">MCQ options
+              <select id="layoutDefault" data-setting>
+                <option value="auto">Automatic</option><option value="side">Column on the right</option>
+                <option value="grid">2 × 2 under the question</option><option value="stack">Full-width list</option></select></label>
+            <label class="field" style="align-self:end"><span></span>
+              <label class="check" style="margin:0 0 8px"><input type="checkbox" id="headerLabel" data-setting checked> Number badge in header</label></label>
+          </div>
+        </fieldset>
+
+        <details class="card">
+          <summary>Header, footer and labels</summary>
+          <div class="card-body">
+            <p class="small" style="margin-top:0">The header and footer belong in the slide master. Either edit <em>View → Slide Master</em> in PowerPoint after downloading (every slide updates), or add a full-slide transparent PNG here now.</p>
+            <div class="row">
+              <label class="btn" for="overlayInput">Choose header/footer PNG</label>
+              <input type="file" id="overlayInput" accept="image/png,image/jpeg" hidden>
+              <button class="btn" type="button" id="overlayClear" hidden>Remove</button>
+            </div>
+            <p class="hint">Use a 16:9 PNG (e.g. 3840 × 2160) with a transparent middle.</p>
+            <div class="grid2" style="margin-top:12px">
+              <label class="field">Content starts at (inch from top)
+                <input id="contentTop" type="number" step="0.1" value="4.9" data-setting></label>
+              <label class="field">Content ends at (inch from top)
+                <input id="contentBottom" type="number" step="0.1" value="28.8" data-setting></label>
+              <label class="field">MCQ label <input id="lblMcq" value="MCQ" data-setting></label>
+              <label class="field">Problem label <input id="lblProblem" value="Problem" data-setting></label>
+              <label class="field">Solution label <input id="lblSolution" value="Solution" data-setting></label>
+              <label class="field">Answer prefix <input id="lblAnswer" value="উত্তর" data-setting></label>
+            </div>
+            <p class="hint">Slide size is 56 × 31.5 inches. <button class="btn" type="button" id="resetSettings" style="padding:4px 10px;margin-left:6px">Reset all settings</button></p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="generate-box">
+      <button class="btn btn-primary btn-big" id="generate" type="button" disabled>Download PowerPoint</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </div>
+  </main>
+
+  <aside class="stage" aria-labelledby="previewTitle">
+    <div class="stage-head">
+      <h2 id="previewTitle">Preview</h2>
+      <span class="small" id="deckInfo" style="color:var(--stage-ink)"></span>
+    </div>
+    <p class="note" id="fontNote" hidden></p>
+    <div id="warnings" hidden></div>
+    <div class="empty" id="emptyState">
+      <p>Your slides appear here as soon as you add an Excel file.</p>
+      <p class="small">Each question gets a question slide, an answer slide and a solution slide.</p>
+    </div>
+    <div class="preview" id="preview"></div>
+  </aside>
+</div>
+
+<dialog id="large" aria-label="Slide preview">
+  <div class="large-bar">
+    <span id="largeCap"></span>
+    <span class="row">
+      <button class="btn" id="largePrev" type="button" aria-label="Previous slide">Previous</button>
+      <button class="btn" id="largeNext" type="button" aria-label="Next slide">Next</button>
+      <button class="btn" id="largeClose" type="button">Close</button>
+    </span>
+  </div>
+  <div id="largeBody"></div>
+</dialog>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="js/latex.js"></script>
+<script src="js/omml.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/pptx-writer.js"></script>
+<script src="js/preview.js"></script>
+<script src="js/claude-prompt.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
